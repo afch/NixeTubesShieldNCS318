@@ -185,7 +185,7 @@ uint8_t OneWire::reset(void)
 	delayMicroseconds(70);
 	r = !DIRECT_READ(reg, mask);
 	interrupts();
-	delayMicroseconds(410);
+	delayMicroseconds(410);		//commented by gra&afch
 	return r;
 }
 
@@ -205,12 +205,12 @@ void OneWire::write_bit(uint8_t v)
 		delayMicroseconds(10);
 		DIRECT_WRITE_HIGH(reg, mask);	// drive output high
 		interrupts();
-		delayMicroseconds(55);
+		delayMicroseconds(35); //55
 	} else {
 		noInterrupts();
 		DIRECT_WRITE_LOW(reg, mask);
 		DIRECT_MODE_OUTPUT(reg, mask);	// drive output low
-		delayMicroseconds(65);
+		delayMicroseconds(45); //65
 		DIRECT_WRITE_HIGH(reg, mask);	// drive output high
 		interrupts();
 		delayMicroseconds(5);
@@ -235,7 +235,7 @@ uint8_t OneWire::read_bit(void)
 	delayMicroseconds(10);
 	r = DIRECT_READ(reg, mask);
 	interrupts();
-	delayMicroseconds(53);
+	delayMicroseconds(33); //53
 	return r;
 }
 
