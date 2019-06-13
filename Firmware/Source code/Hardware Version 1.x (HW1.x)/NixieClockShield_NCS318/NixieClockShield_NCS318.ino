@@ -1319,7 +1319,7 @@ void SyncWithGPS()
   //byte HoursOffset=2;
   if (GPS_Sync_Flag == 0) 
   {
-    if ((millis()-GPS_Date_Time.GPS_Data_Parsed_time)>3000) {#ifdef DEBUG Serial.println(F("Parsed data to old")); #endif return;}
+    if ((millis()-GPS_Date_Time.GPS_Data_Parsed_time)>3000) {Serial.println(F("Parsed data to old")); return;}
     #ifdef DEBUG 
     Serial.println(F("Updating time..."));
     Serial.println(GPS_Date_Time.GPS_hours);
@@ -1437,7 +1437,7 @@ uint8_t ControlCheckSum()
   while (GPS_Package[i]!='*')
   {
     CheckSum^=GPS_Package[i];
-    if (++i == GPS_BUFFER_LENGTH) {#ifdef DEBUG Serial.println(F("End of the line")); #endif return 0;} // end of line not found
+    if (++i == GPS_BUFFER_LENGTH) {Serial.println(F("End of the line")); return 0;} // end of line not found
   }
 
   if (GPS_Package[++i]>0x40) MessageCheckSum=(GPS_Package[i]-0x37)<<4;  // ASCII codes to DEC convertation 
@@ -1445,7 +1445,7 @@ uint8_t ControlCheckSum()
   if (GPS_Package[++i]>0x40) MessageCheckSum+=(GPS_Package[i]-0x37);
   else                  MessageCheckSum+=(GPS_Package[i]-0x30);
   
-  if (MessageCheckSum != CheckSum) {#ifdef DEBUG Serial.println("wrong checksum"); #endif return 0;} // wrong checksum
+  if (MessageCheckSum != CheckSum) {Serial.println("wrong checksum"); return 0;} // wrong checksum
   //Serial.println("Checksum is ok");
   return 1; // all ok!
 }
