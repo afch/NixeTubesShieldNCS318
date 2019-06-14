@@ -2,7 +2,7 @@
 //driver version 1.0
 //1 on register's output will turn on a digit 
 
-
+//v1.3 can work inside interrupt with Mega (2560)
 //v1.2 SPI setup moved to driver's file
 //v1.1 Mixed up on/off for dots
 
@@ -22,38 +22,27 @@ void SPISetup()
 
 void doIndication()
 {
+  #if defined (__AVR_ATmega328P__)
   static unsigned long lastTimeInterval1Started;
   static unsigned long curMicros;
   curMicros=micros();
-  ///////debug////
-  /*static unsigned long timeArray[10];
-  static int counter=0;
-  timeArray[counter]=curMicros-lastTimeInterval1Started;
-  counter++;
-  if (counter==10)
-    {
-      counter=0;
-      for (int i=0;i<10;i++)
-      Serial.println(timeArray[i]);
-    }*/
-  ///debug end/////
   if ((curMicros-lastTimeInterval1Started)<2000 /*fpsLimit*/) return;
-  //if (menuPosition==TimeIndex) doDotBlink();
   lastTimeInterval1Started=curMicros;
+  #endif
     
   unsigned long Var32=0;
   
   long digits=stringToDisplay.toInt();
-  //long digits=12345678;
-  //Serial.print("strtoD=");
-  //Serial.println(stringToDisplay);
-  
   /**********************************************************
    * Подготавливаем данные по 32бита 3 раза
    * Формат данных [H1][H2}[M1][M2][S1][Y1][Y2]
    *********************************************************/
-   
+
+  #if defined (__AVR_ATmega328P__) 
   digitalWrite(LEpin, LOW); 
+  #else
+  bitClear(PORTB, PB4);
+  #endif
   //-------- REG 2 ----------------------------------------------- 
   /*Var32|=(unsigned long)(SymbolArray[digits%10]&doEditBlink(7))<<10; // Y2
   digits=digits/10;
@@ -120,7 +109,11 @@ void doIndication()
   SPI.transfer(Var32>>8);
   SPI.transfer(Var32);
 
+  #if defined (__AVR_ATmega328P__)
   digitalWrite(LEpin, HIGH);    
+  #else
+  bitSet(PORTB, PB4);
+  #endif
 //-------------------------------------------------------------------------
 }
 
@@ -170,7 +163,7 @@ word blankDigit(int pos)
 
 word moveMask()
 {
-  #define tubesQuantity 3
+  #define tubesQuantity 6
   static int callCounter=0;
   static int tubeCounter=0;
   word onoffTubeMask;

@@ -1,7 +1,12 @@
-const String FirmwareVersion = "018400";
+const String FirmwareVersion = "018500";
 #define HardwareVersion "NCS318 for HW 1.x"
+//#define DEBUG
 //Format                _X.XXX_
-//NIXIE CLOCK SHIELD NCS314 v 2.x by GRA & AFCH (fominalec@gmail.com)
+//NIXIE CLOCK SHIELD NCS318 v 1.x by GRA & AFCH (fominalec@gmail.com)
+//1.85 14.06.2019
+//indication is working inside interrupt (only for Arduino Mega), driver v1.3 is required
+//Added: support programmable leds ws2812b
+//Some performance optimizations 
 //1.84 08.04.2018
 //LEDs functions moved to external file
 //LEDs freezing while music (or sound) played.
@@ -386,6 +391,9 @@ void setup()
   downButton.multiclickTime = 30;  // Time limit for multi clicks
   downButton.longClickTime  = 2000; // time until "held-down clicks" register
 
+  #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+    timerSetup();
+  #endif
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   doTest();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -483,7 +491,9 @@ void loop() {
   }
 
   if ((menuPosition == TimeIndex) || (modeChangedByUser == false) ) modesChanger();
-  doIndication();
+  #if defined (__AVR_ATmega328P__)
+    doIndication();
+  #endif
 
   setButton.Update();
   upButton.Update();
@@ -849,7 +859,9 @@ void doTest()
      Serial.println(stringToDisplay); 
      #endif
    }
-   doIndication();//delayMicroseconds(2000);
+   #if defined (__AVR_ATmega328P__)
+   doIndication();
+   #endif
   } 
   
   if ( !ds.search(addr)) 
@@ -1534,3 +1546,25 @@ float getTemperature (boolean bTempFormat)
   if (iterator==8) iterator=0;
   return fDegrees;
 }
+
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+ISR(TIMER4_COMPA_vect)
+{   
+  sei();
+  doIndication();
+}
+
+void timerSetup()
+{
+  //timer3 setup for calling doIndication function
+  TCCR4A = 0;             //control registers reset (WGM21, WGM20)
+  TCCR4B = 0;             //control registers reset 
+  TCCR4B = (1 << CS12)|(1 << CS10)|(1 << WGM12); //prescaler 1024 and CTC mode
+  //OCR5A = 31; //2 mS
+  TCNT4=0; //reset counter to 0
+  OCR4A = 46; //3mS
+  //OCR4A = 92; //6mS
+  TIMSK4 = (1 << OCIE1A);//TIMER3_COMPA_vect interrupt enable
+  sei();
+}
+#endif
