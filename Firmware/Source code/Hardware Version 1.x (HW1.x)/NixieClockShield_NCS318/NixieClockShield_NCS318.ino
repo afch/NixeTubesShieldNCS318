@@ -1,8 +1,13 @@
-const String FirmwareVersion = "018500";
-#define HardwareVersion "NCS318 for HW 1.x"
+const String FirmwareVersion = "018520";
+#define HardwareVersion "NCS318/568 for HW 1.x"
 //#define DEBUG
 //Format                _X.XXX_
-//NIXIE CLOCK SHIELD NCS318 v 1.x by GRA & AFCH (fominalec@gmail.com)
+//NIXIE CLOCK SHIELD NCS318/568 for HW 1.x by GRA & AFCH (fominalec@gmail.com)
+//1.85.2 21.02.2020
+//Fixed: Bug with time zones more than +-9
+// GPS parser has been replaced by NEOGPS
+//1.85.1 05.01.2020
+//Value of "HardwareVersion" was changed to NCS318/568
 //1.85 14.06.2019
 //indication is working inside interrupt (only for Arduino Mega), driver v1.3 is required
 //Added: support programmable leds ws2812b
@@ -52,6 +57,11 @@ const String FirmwareVersion = "018500";
 #include <OneWire.h>
 //IR remote control /////////// START /////////////////////////////
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+
+#include <NMEAGPS.h>
+static NMEAGPS  gps;
+static gps_fix  fix;
+
 #define PreZero(digit) ((abs(digit)<10)?"0"+String(abs(digit)):String(abs(digit)))
 #include <IRremote.h>
 int RECV_PIN = 4;
@@ -134,7 +144,7 @@ int DownButtonState = 0;
 
 //IR remote control /////////// START /////////////////////////////
 
-#define GPS_BUFFER_LENGTH 83
+/*#define GPS_BUFFER_LENGTH 83
 
 char GPS_Package[GPS_BUFFER_LENGTH];
 byte GPS_position=0;
@@ -150,8 +160,10 @@ struct GPS_DATE_TIME
   bool GPS_Valid_Data=false;
   unsigned long GPS_Data_Parsed_time;
 };
+*/
+//GPS_DATE_TIME GPS_Date_Time;
 
-GPS_DATE_TIME GPS_Date_Time;
+unsigned long GPS_Data_Parsed_time;
 
 boolean UD, LD; // DOTS control;
 
@@ -699,6 +711,7 @@ void loop() {
   }
 
   static bool updateDateTime = false;
+  float curTemp=0;
   switch (menuPosition)
   {
     case TimeIndex: //time mode
@@ -736,7 +749,7 @@ void loop() {
       break;
     case TemperatureIndex: //missed break
     case DegreesFormatIndex:
-      float curTemp;
+      
       if (!transactionInProgress)
       {
         curTemp=getTemperature(value[DegreesFormatIndex]);
@@ -1331,16 +1344,17 @@ void SyncWithGPS()
   //byte HoursOffset=2;
   if (GPS_Sync_Flag == 0) 
   {
-    if ((millis()-GPS_Date_Time.GPS_Data_Parsed_time)>3000) {Serial.println(F("Parsed data to old")); return;}
+    if ((millis()-GPS_Data_Parsed_time)>600) {Serial.println(F("Parsed data to old")); return;}
     #ifdef DEBUG 
     Serial.println(F("Updating time..."));
-    Serial.println(GPS_Date_Time.GPS_hours);
-    Serial.println(GPS_Date_Time.GPS_minutes);
-    Serial.println(GPS_Date_Time.GPS_seconds);
+    Serial.println(fix.dateTime.hours);
+    Serial.println(fix.dateTime.minutes);
+    Serial.println(fix.dateTime.seconds);
     #endif
-    
-    setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
-    adjustTime(value[HoursOffsetIndex] * 3600);
+
+    setTime(fix.dateTime.hours, fix.dateTime.minutes, fix.dateTime.seconds, fix.dateTime.date, fix.dateTime.month, fix.dateTime.year);
+    //setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
+    adjustTime((long)value[HoursOffsetIndex] * 3600);
     setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
     GPS_Sync_Flag = 1;
     Last_Time_GPS_Sync=millis();
@@ -1353,6 +1367,12 @@ void SyncWithGPS()
 }
 
 void GetDataFromSerial1()
+{
+  if (gps.available( Serial1 )) fix = gps.read();
+  if ((fix.valid.time) && (fix.valid.date) && (fix.status>=3)) GPS_Data_Parsed_time=millis();
+}
+
+/*void GetDataFromSerial1()
 {
   if (Serial1.available()) {     // If anything comes in Serial1 (pins 0 & 1)
     byte GPS_incoming_byte;
@@ -1369,7 +1389,7 @@ void GetDataFromSerial1()
     {
       GPS_Package[GPS_position]=0;
       GPS_position=0;
-      if (ControlCheckSum()) {/*Serial.println("Call parse");*/ GPS_Parse_DateTime();}
+      if (ControlCheckSum()) { GPS_Parse_DateTime();}
         
     }
   }
@@ -1461,7 +1481,7 @@ uint8_t ControlCheckSum()
   //Serial.println("Checksum is ok");
   return 1; // all ok!
 }
-
+*/
 #endif
 
 String updateTemperatureString(float fDegrees)
