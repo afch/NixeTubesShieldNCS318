@@ -320,7 +320,7 @@
 //    NOTE:  At update rates higher than 1Hz, the updates may arrive with 
 //    some increasing variance.
 
-//#define NMEAGPS_TIMESTAMP_FROM_INTERVAL
+#define NMEAGPS_TIMESTAMP_FROM_INTERVAL
 
 // 2) From the PPS pin of the GPS module.  It is up to the application 
 //    developer to decide how to capture that event.  For example, you could:
