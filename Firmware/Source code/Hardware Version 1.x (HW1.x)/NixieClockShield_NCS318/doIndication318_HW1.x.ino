@@ -1,7 +1,8 @@
 //driver for NCS318 HW1.x (registers HV5122)
-//driver version 1.0
+//driver version 1.4
 //1 on register's output will turn on a digit 
 
+//v1.4 (HV5222 MOD)
 //v1.3 can work inside interrupt with Mega (2560)
 //v1.2 SPI setup moved to driver's file
 //v1.1 Mixed up on/off for dots
@@ -15,9 +16,13 @@
 
 void SPISetup()
 {
-  SPI.begin(); //
-  SPI.setDataMode (SPI_MODE2); // Mode 3 SPI
-  SPI.setClockDivider(SPI_CLOCK_DIV8); // SCK = 16MHz/128= 125kHz
+  pinMode(RHV5222PIN, INPUT_PULLUP);
+  HV5222=!digitalRead(RHV5222PIN);
+  SPI.begin(); 
+
+  if (HV5222)
+    SPI.beginTransaction(SPISettings(2000000, LSBFIRST, SPI_MODE2));
+    else SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE2));
 }
 
 void doIndication()
@@ -43,25 +48,7 @@ void doIndication()
   #else
   bitClear(PORTB, PB4);
   #endif
-  //-------- REG 2 ----------------------------------------------- 
-  /*Var32|=(unsigned long)(SymbolArray[digits%10]&doEditBlink(7))<<10; // Y2
-  digits=digits/10;
 
-  Var32 |= (unsigned long)SymbolArray[digits%10]&doEditBlink(6);//y1
-  digits=digits/10;
-
-  if (LD) Var32|=LowerDotsMask;
-    else  Var32&=~LowerDotsMask;
-  
-  if (UD) Var32|=UpperDotsMask;
-    else Var32&=~UpperDotsMask;  
-    
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
- //-------------------------------------------------------------------------
-*/
  //-------- REG 1 ----------------------------------------------- 
   Var32=0;
  
@@ -80,10 +67,19 @@ void doIndication()
   if (UD) Var32|=UpperDotsMask;
     else Var32&=~UpperDotsMask;  
 
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
+  if (HV5222) 
+  {
+    SPI.transfer(Var32);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>24);
+  } else 
+  {
+    SPI.transfer(Var32>>24);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32);
+  }
  //-------------------------------------------------------------------------
 
  //-------- REG 0 ----------------------------------------------- 
@@ -104,10 +100,19 @@ void doIndication()
   if (UD) Var32|=UpperDotsMask;
     else Var32&=~UpperDotsMask;  
      
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
+  if (HV5222) 
+  {
+    SPI.transfer(Var32);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>24);
+  } else 
+  {
+    SPI.transfer(Var32>>24);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32);
+  }
 
   #if defined (__AVR_ATmega328P__)
   digitalWrite(LEpin, HIGH);    
@@ -163,7 +168,7 @@ word blankDigit(int pos)
 
 word moveMask()
 {
-  #define tubesQuantity 6
+  #define tubesQuantity 3
   static int callCounter=0;
   static int tubeCounter=0;
   word onoffTubeMask;

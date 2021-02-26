@@ -1,8 +1,15 @@
-const String FirmwareVersion = "019000";
-#define HardwareVersion "NCS318/568 for HW 1.x" 
+const String FirmwareVersion = "019400";
+const char HardwareVersion[] PROGMEM = {"NCS318/568 for HW 1.x HV5122 or HV5222"};
 //#define DEBUG
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS318/568 for HW 1.x by GRA & AFCH (fominalec@gmail.com)
+//1.94 26.02.2021
+//Added: Сhecking the presence of a gps receiver when turned on.
+//Return to the previous gps parser
+//1.92 21.01.2021
+//Added: defines for GPS receiver types
+//1.91 29.07.2020
+//The driver has been changed to support BOTH HV5122 and HV5222 registers (switching using resistor R5222 Arduino pin No. 8)
 //1.90 08.06.2020 
 //Fixed: GPS timezone issue: added breakTime(now(), tm) to adjustTime function at Time.cpp
 //1.89 03.04.2020
@@ -61,6 +68,9 @@ const String FirmwareVersion = "019000";
 #include <Wire.h>
 #include <ClickButton.h>
 #include <TimeLib.h>
+#ifndef GRA_AND_AFCH_TIME_LIB_MOD
+  #error The "Time (TimeLib)" library modified by GRA and AFCH must be used!
+#endif
 #include <Tone.h>
 #include <EEPROM.h>
 #include "doIndication318_HW1.x.h"
@@ -69,13 +79,33 @@ const String FirmwareVersion = "019000";
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 
 #define GPS_SYNC_INTERVAL 1800000 // in milliseconds
+//#define GPS_SYNC_INTERVAL 180000 //3 minutes
 unsigned long Last_Time_GPS_Sync = 0;
-bool GPS_Sync_Flag = 1;
+//bool GPS_Sync_Flag = false;
 //uint32_t GPS_Sync_Interval=120000; // 2 minutes
-uint32_t GPS_Sync_Interval=60000; // 1 minutes
-#include <NMEAGPS.h>
-static NMEAGPS  gps;
-static gps_fix  fix;
+uint32_t GPS_Sync_Interval = 60000; // first try = 1 minute
+uint32_t MillsNow=0;
+#define TIME_TO_TRY 60000 //1 minute
+bool AttMsgWasShowed=false;
+
+#define GPS_BUFFER_LENGTH 83
+
+char GPS_Package[GPS_BUFFER_LENGTH];
+byte GPS_position = 0;
+
+struct GPS_DATE_TIME
+{
+  byte GPS_hours;
+  byte GPS_minutes;
+  byte GPS_seconds;
+  byte GPS_day;
+  byte GPS_mounth;
+  int GPS_year;
+  bool GPS_Valid_Data = false;
+  unsigned long GPS_Data_Parsed_time;
+};
+
+GPS_DATE_TIME GPS_Date_Time;
 
 #define PreZero(digit) ((abs(digit)<10)?"0"+String(abs(digit)):String(abs(digit)))
 #include <IRremote.h>
@@ -369,6 +399,7 @@ void setup()
   Serial.begin(115200);
   #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
   Serial1.begin(9600);
+  digitalWrite(19, HIGH);
   #endif
 
   if (EEPROM.read(HourFormatEEPROMAddress) != 12) value[hModeValueIndex] = 24; else value[hModeValueIndex] = 12;
@@ -477,15 +508,27 @@ void loop() {
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 
-  if (gps.available( Serial1 )) fix = gps.read(); 
-    else fix.valid.time=false;
-  if (((millis()) - Last_Time_GPS_Sync) > GPS_Sync_Interval) 
+  MillsNow=millis();
+  if ((MillsNow - Last_Time_GPS_Sync) > GPS_Sync_Interval)
   {
-    GPS_Sync_Interval=GPS_SYNC_INTERVAL;
-    GPS_Sync_Flag = 0;
-    //Serial.println(F("Attempt to sync with GPS"));
+    //GPS_Sync_Interval = GPS_SYNC_INTERVAL; // <----!
+    //GPS_Sync_Flag = 0;
+    if (AttMsgWasShowed==false) 
+    {
+      Serial.println(F("Attempt to sync with GPS."));
+      AttMsgWasShowed=true;
+    }
+    GetDataFromSerial1();
+    //SyncWithGPS();
+  } 
+  if ((MillsNow - Last_Time_GPS_Sync) > GPS_Sync_Interval + TIME_TO_TRY) 
+  {
+    Last_Time_GPS_Sync=MillsNow; //if it is not possible to synchronize within the allotted time TIME_TO_TRY, then we postpone attempts to the next time interval.
+    //GPS_Sync_Flag = 1;   
+    //GPS_Sync_Interval = GPS_SYNC_INTERVAL; 
+    Serial.println(F("All attempts were unsuccessful."));
+    AttMsgWasShowed=false;
   }
-  if (GPS_Sync_Flag==0) GPSCheckValidity();
   
   IRresults.value = 0;
   if (irrecv.decode(&IRresults)) {
@@ -847,7 +890,10 @@ void doTest()
 {
   Serial.print(F("Firmware version: "));
   Serial.println(FirmwareVersion.substring(1,2)+"."+FirmwareVersion.substring(2,5));
-  Serial.println(HardwareVersion);
+  for (byte k = 0; k < strlen_P(HardwareVersion); k++) {
+    Serial.print((char)pgm_read_byte_near(HardwareVersion + k));
+  }
+  Serial.println();
   #ifdef DEBUG 
   Serial.println(F("Start Test")); 
   #endif
@@ -857,6 +903,10 @@ void doTest()
   //p=0; //need to be deleted
 
   LEDsTest();
+  #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+  if (Serial1.available() > 20) Serial.println(F("GPS detected"));
+     else Serial.println(F("GPS NOT detected!"));
+  #endif
   
   #ifdef tubes8
   String testStringArray[11]={"00000000","11111111","22222222","33333333","44444444","55555555","66666666","77777777","88888888","99999999",""};
@@ -1315,69 +1365,156 @@ String updateDateString()
   return DateString;
 }
 
-/*float getTemperature (boolean bTempFormat)
-{
-  byte TempRawData[2];
-  ds.reset();
-  ds.write(0xCC); //skip ROM command
-  ds.write(0x44); //send make convert to all devices
-  ds.reset();
-  ds.write(0xCC); //skip ROM command
-  ds.write(0xBE); //send request to all devices
-
-  TempRawData[0] = ds.read();
-  TempRawData[1] = ds.read();
-  int16_t raw = (TempRawData[1] << 8) | TempRawData[0];
-  if (raw == -1) raw = 0;
-  float celsius = (float)raw / 16.0;
-  float fDegrees;
-  if (!bTempFormat) fDegrees = celsius * 10;
-  else fDegrees = (celsius * 1.8 + 32.0) * 10;
-  //Serial.println(fDegrees);
-  return fDegrees;
-}*/
-
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 
 void SyncWithGPS()
 {
-    //tone1.play(2000,100);
-    Serial.println(F("Updating time..."));
-    Serial.println(fix.dateTime.hours);
-    Serial.println(fix.dateTime.minutes);
-    Serial.println(fix.dateTime.seconds);
+   if ((millis() - GPS_Date_Time.GPS_Data_Parsed_time) > 3000) {
+      //Serial.println(F("Parsed data to old"));
+      return;
+    }
+    Serial.println(F("Updating time from GPS..."));
+    Serial.println(GPS_Date_Time.GPS_hours);
+    Serial.println(GPS_Date_Time.GPS_minutes);
+    Serial.println(GPS_Date_Time.GPS_seconds);
 
-    //setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
-    setTime(fix.dateTime.hours, fix.dateTime.minutes, fix.dateTime.seconds, fix.dateTime.date, fix.dateTime.month, fix.dateTime.year);
-    if (gps.UTCms()>=500) adjustTime(1);
+    setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
     adjustTime((long)value[HoursOffsetIndex] * 3600);
     setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
-    GPS_Sync_Flag = 1;
-    Last_Time_GPS_Sync = millis();
+    Last_Time_GPS_Sync = MillsNow;
+    GPS_Sync_Interval = GPS_SYNC_INTERVAL;
+    AttMsgWasShowed=false;
 }
 
-void GPSCheckValidity()
+void GetDataFromSerial1()
 {
-if ((fix.dateTime.hours < 0)
-      || (fix.dateTime.hours > 23)) return;
+  if (Serial1.available()) {     // If anything comes in Serial1 (pin 19)
+    byte GPS_incoming_byte;
+    GPS_incoming_byte = Serial1.read();
+    //Serial.write(GPS_incoming_byte);
+    GPS_Package[GPS_position] = GPS_incoming_byte;
+    GPS_position++;
+    if (GPS_position == GPS_BUFFER_LENGTH - 1)
+    {
+      GPS_position = 0;
+      // Serial.println("more then BUFFER_LENGTH!!!!");
+    }
+    if (GPS_incoming_byte == 0x0A)
+    {
+      GPS_Package[GPS_position] = 0;
+      GPS_position = 0;
+      if (ControlCheckSum()) {
+        if (GPS_Parse_DateTime()) SyncWithGPS();
+      }
 
-    if ((fix.dateTime.minutes < 0)
-      || (fix.dateTime.minutes > 59)) return;
+    }
+  }
+}
 
-    if ((fix.dateTime.seconds < 0)
-      || (fix.dateTime.seconds > 59)) return;
+bool GPS_Parse_DateTime()
+{
+  bool GPSsignal = false;
+  if (!((GPS_Package[0]   == '$')
+        && (GPS_Package[3] == 'R')
+        && (GPS_Package[4] == 'M')
+        && (GPS_Package[5] == 'C'))) {
+    return false;
+  }
+  else
+  {
+    // Serial.println("RMC!!!");
+  }
+  //Serial.print("hh: ");
+  int hh = (GPS_Package[7] - 48) * 10 + GPS_Package[8] - 48;
+  //Serial.println(hh);
+  int mm = (GPS_Package[9] - 48) * 10 + GPS_Package[10] - 48;
+  //Serial.print("mm: ");
+  //Serial.println(mm);
+  int ss = (GPS_Package[11] - 48) * 10 + GPS_Package[12] - 48;
+  //Serial.print("ss: ");
+  //Serial.println(ss);
 
-    if ((fix.dateTime.date < 0)
-      || (fix.dateTime.date > 31)) return;   
+  byte GPSDatePos = 0;
+  int CommasCounter = 0;
+  for (int i = 12; i < GPS_BUFFER_LENGTH ; i++)
+  {
+    if (GPS_Package[i] == ',')
+    {
+      CommasCounter++;
+      if (CommasCounter == 8)
+      {
+        GPSDatePos = i + 1;
+        break;
+      }
+    }
+  }
+  //Serial.print("dd: ");
+  int dd = (GPS_Package[GPSDatePos] - 48) * 10 + GPS_Package[GPSDatePos + 1] - 48;
+  //Serial.println(dd);
+  int MM = (GPS_Package[GPSDatePos + 2] - 48) * 10 + GPS_Package[GPSDatePos + 3] - 48;
+  //Serial.print("MM: ");
+  //Serial.println(MM);
+  int yyyy = 2000 + (GPS_Package[GPSDatePos + 4] - 48) * 10 + GPS_Package[GPSDatePos + 5] - 48;
+  //Serial.print("yyyy: ");
+  //Serial.println(yyyy);
+  //if ((hh<0) || (mm<0) || (ss<0) || (dd<0) || (MM<0) || (yyyy<0)) return false;
+  if ( !inRange( yyyy, 2018, 2038 ) ||
+       !inRange( MM, 1, 12 ) ||
+       !inRange( dd, 1, 31 ) ||
+       !inRange( hh, 0, 23 ) ||
+       !inRange( mm, 0, 59 ) ||
+       !inRange( ss, 0, 59 ) ) return false;
+  else
+  {
+    GPS_Date_Time.GPS_hours = hh;
+    GPS_Date_Time.GPS_minutes = mm;
+    GPS_Date_Time.GPS_seconds = ss;
+    GPS_Date_Time.GPS_day = dd;
+    GPS_Date_Time.GPS_mounth = MM;
+    GPS_Date_Time.GPS_year = yyyy;
+    GPS_Date_Time.GPS_Data_Parsed_time = millis();
+    //Serial.println("Precision TIME HAS BEEN ACCURED!!!!!!!!!");
+    //GPS_Package[0]=0x0A;
+    return 1;
+  }
+}
 
-    if ((fix.dateTime.month < 0)
-      || (fix.dateTime.month > 12)) return;
-      
-    if ((fix.dateTime.full_year() < 2020)
-      || (fix.dateTime.full_year() > 2030)) return;
-      
-    fix.valid.time=false;
-    SyncWithGPS();
+uint8_t ControlCheckSum()
+{
+  uint8_t  CheckSum = 0, MessageCheckSum = 0;   // check sum
+  uint16_t i = 1;                // 1 sybol left from '$'
+
+  while (GPS_Package[i] != '*')
+  {
+    CheckSum ^= GPS_Package[i];
+    if (++i == GPS_BUFFER_LENGTH) {
+      //Serial.println(F("End of the line not found"));  // end of line not found
+      return 0;
+    }
+  }
+
+  if (GPS_Package[++i] > 0x40) MessageCheckSum = (GPS_Package[i] - 0x37) << 4; // ASCII codes to DEC convertation
+  else                  MessageCheckSum = (GPS_Package[i] - 0x30) << 4;
+  if (GPS_Package[++i] > 0x40) MessageCheckSum += (GPS_Package[i] - 0x37);
+  else                  MessageCheckSum += (GPS_Package[i] - 0x30);
+
+  if (MessageCheckSum != CheckSum) {
+    //Serial.println(F("wrong checksum"));  // wrong checksum
+    return 0;
+  }
+  //Serial.println("Checksum is ok");
+  return 1; // all ok!
+}
+
+boolean inRange( int no, int low, int high )
+{
+  if ( no < low || no > high )
+  {
+    Serial.println(F("Date or Time not in range"));
+    //Serial.println(String(no) + ":" + String (low) + "-" + String(high));
+    return false;
+  }
+  return true;
 }
 
 #endif
@@ -1494,4 +1631,3 @@ void testDS3231TempSensor()
     }
   }
 }
-
