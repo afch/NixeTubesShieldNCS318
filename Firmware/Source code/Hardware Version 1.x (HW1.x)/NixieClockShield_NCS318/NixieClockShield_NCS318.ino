@@ -77,8 +77,10 @@ const char HardwareVersion[] PROGMEM = {"NCS318/568 for HW 1.x HV5122 or HV5222"
 #include <EEPROM.h>
 #include "doIndication318_HW1.x.h"
 #include <OneWire.h>
+// Begin GPS Rollover Fix
 #include "RTClib.h"
 RTC_DS3231 rtc;
+// END GPS Rollover Fix
 //IR remote control /////////// START /////////////////////////////
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 
@@ -389,7 +391,9 @@ long modesChangePeriod = timeModePeriod;
 //end of antipoisoning transaction
 
 bool GPS_sync_flag=false;
+// Begin GPS Rollover Fix
 bool correctRollover = false;
+// END GPS Rollover Fix
 
 extern const int LEDsDelay;
 
@@ -465,11 +469,13 @@ void setup()
     setLEDsFromEEPROM();
   }
 
+// Begin GPS Rollover Fix
    if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
     Serial.flush();
     while (1) delay(10);
   }
+// END GPS Rollover Fix
   
   getRTCTime();
   byte prevSeconds = RTC_seconds;
