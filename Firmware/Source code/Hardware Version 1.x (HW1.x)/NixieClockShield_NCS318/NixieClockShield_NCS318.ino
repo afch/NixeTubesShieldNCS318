@@ -84,8 +84,8 @@ RTC_DS3231 rtc;
 //IR remote control /////////// START /////////////////////////////
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 
-//#define GPS_SYNC_INTERVAL 1800000 // in milliseconds
-#define GPS_SYNC_INTERVAL 60000 //1 minute
+#define GPS_SYNC_INTERVAL 1800000 // in milliseconds
+//#define GPS_SYNC_INTERVAL 180000 //3 minutes
 unsigned long Last_Time_GPS_Sync = 0;
 //bool GPS_Sync_Flag = false;
 //uint32_t GPS_Sync_Interval=120000; // 2 minutes
@@ -918,7 +918,7 @@ void doTest()
   
   p=song;
   parseSong(p);
-  p=0; //need to be deleted
+  //p=0; //need to be deleted
 
   LEDsTest();
   #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
@@ -1419,12 +1419,18 @@ void SyncWithGPS()
     Serial.print("/");
     Serial.println(correctedRolloverTime.year());
     correctRollover = false;
-    // END GPS Rollover Fix
     } else {
     setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
     adjustTime((long)value[HoursOffsetIndex] * 3600);
     setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
+    Serial.print("Date: ");
+    Serial.print(month());
+    Serial.print("/");
+    Serial.print(day());
+    Serial.print("/");
+    Serial.println(year());
     }
+    // END GPS Rollover Fix
     Last_Time_GPS_Sync = MillsNow;
     GPS_Sync_Interval = GPS_SYNC_INTERVAL;
     AttMsgWasShowed=false;
@@ -1503,16 +1509,18 @@ bool GPS_Parse_DateTime()
   //Serial.println(yyyy);
   //if ((hh<0) || (mm<0) || (ss<0) || (dd<0) || (MM<0) || (yyyy<0)) return false;
   // Begin GPS Rollover Fix
-  if ( !inRange( yyyy, 2018, 2038 ) ||
-       !inRange( MM, 1, 12 ) ||
+  if ( !inRange( yyyy, 2022, 2038 )) { 
+  Serial.println("GPS Rollover Correction Required!");
+  correctRollover = true;
+    }
+  else if (!inRange( MM, 1, 12 ) ||
        !inRange( dd, 1, 31 ) ||
        !inRange( hh, 0, 23 ) ||
        !inRange( mm, 0, 59 ) ||
        !inRange( ss, 0, 59 ) ) {
-  Serial.println("GPS Rollover Correction Required!");
-  correctRollover = true;
-    }
-    // END GPS Rollover Fix
+       Serial.println("GPS Time/Date Invalid! Waiting for lock."); 
+       return false;
+       }
     GPS_Date_Time.GPS_hours = hh;
     GPS_Date_Time.GPS_minutes = mm;
     GPS_Date_Time.GPS_seconds = ss;
@@ -1523,6 +1531,7 @@ bool GPS_Parse_DateTime()
     //Serial.println("Precision TIME HAS BEEN ACCURED!!!!!!!!!");
     //GPS_Package[0]=0x0A;
     return 1;
+        // END GPS Rollover Fix
 }
 
 uint8_t ControlCheckSum()
@@ -1639,7 +1648,6 @@ ISR(TIMER4_COMPA_vect)
 {   
   sei();
   doIndication();
-  //Serial.println(stringToDisplay);
 }
 
 void timerSetup()
