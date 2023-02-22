@@ -1,5 +1,5 @@
-# Nixe Tubes Shield NCS318
-Sketch for Arduino UNO, Mega and Nixie Tubes Shield NCS318 by GRA &amp; AFCH
+# Nixe Tubes Shield NCS318 / NCS3568
+Sketch for Arduino UNO, Mega and Nixie Tubes Shield NCS318/NCS3568 by GRA &amp; AFCH
 1. This repository content sources of project for Nixie Clock developed by GRA & AFCH.
 
 	Folders description:
@@ -21,7 +21,7 @@ https://youtu.be/DQZWPn0iAHw
 
 3. Compatibility:
 
-	Nixie Clock Shield for Arduino - <b>NCS318</b> (Hardware Versions: HW1.0, HW1.1) <br>
+	Nixie Clock Shield for Arduino - <b>NCS318 / NCS3568</b> (Hardware Versions: HW1.0, HW1.1) <br>
 	
 3. eBay stores:
 First (gra_and_afch) - https://www.ebay.com/sch/gra_and_afch/m.html?_nkw=&_armrs=1 <br>
