@@ -1,4 +1,4 @@
-# Nixe Tubes Shield NCS318 / NCS3568
+# Nixe Tubes Shield NCS318-4 Tubes, NCS318-6 Tubes, NCS3568-4 Tubes and NCS3568-6 Tubes.
 Sketch for Arduino UNO, Mega and Nixie Tubes Shield NCS318/NCS3568 by GRA &amp; AFCH
 1. This repository content sources of project for Nixie Clock developed by GRA & AFCH.
 
