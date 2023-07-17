@@ -1,8 +1,10 @@
-const String FirmwareVersion = "019400";
+const String FirmwareVersion = "019500";
 const char HardwareVersion[] PROGMEM = {"NCS318/568 for HW 1.x HV5122 or HV5222"};
 //#define DEBUG
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS318/568 for HW 1.x by GRA & AFCH (fominalec@gmail.com)
+//1.95 16.01.2022
+//Fix for GRA & AFCH GPS Receiver Date Rollover BUG
 //1.94 26.02.2021
 //Added: Сhecking the presence of a gps receiver when turned on.
 //Return to the previous gps parser
@@ -75,6 +77,10 @@ const char HardwareVersion[] PROGMEM = {"NCS318/568 for HW 1.x HV5122 or HV5222"
 #include <EEPROM.h>
 #include "doIndication318_HW1.x.h"
 #include <OneWire.h>
+// Begin GPS Rollover Fix
+#include "RTClib.h"
+RTC_DS3231 rtc;
+// END GPS Rollover Fix
 //IR remote control /////////// START /////////////////////////////
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 
@@ -290,7 +296,7 @@ int RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year, RTC_day_o
 int parent[SettingsCount] = {NoParent, NoParent, NoParent, NoParent,NoParent,NoParent,1,       1,       1,       2,         2,       2,         2,         3,       3,       3,       3,       4,           5,        6};
 int firstChild[SettingsCount] = {6,       9,       13,     17,      18,      19,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0};
 int lastChild[SettingsCount] = { 8,      12,       16,     17,      18,      19,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0};
-int value[SettingsCount] = {     0,       0,       0,      0,       0,       0,       0,       0,       0,  EU_DateFormat,  0,       0,         0,         0,       0,       0,       0,       24,          0,        2};
+int value[SettingsCount] = {     0,       0,       0,      0,       0,       0,       0,       0,       0,       1,         0,       0,         0,         0,       0,       0,       0,       24,          1,        -5};
 int maxValue[SettingsCount] = {  0,       0,       0,      0,       0,       0,       23,      59,      59, US_DateFormat,  31,      12,        99,       23,      59,      59,       1,       24,     FAHRENHEIT,    14};
 int minValue[SettingsCount] = {  0,       0,       0,      12,      0,       0,       00,      00,      00, EU_DateFormat,  1,       1,         00,       00,      00,      00,       0,       12,      CELSIUS,     -12};
 int blinkPattern[SettingsCount] = {  
@@ -385,6 +391,9 @@ long modesChangePeriod = timeModePeriod;
 //end of antipoisoning transaction
 
 bool GPS_sync_flag=false;
+// Begin GPS Rollover Fix
+bool correctRollover = false;
+// END GPS Rollover Fix
 
 extern const int LEDsDelay;
 
@@ -459,6 +468,15 @@ void setup()
   {
     setLEDsFromEEPROM();
   }
+
+// Begin GPS Rollover Fix
+   if (! rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
+    while (1) delay(10);
+  }
+// END GPS Rollover Fix
+  
   getRTCTime();
   byte prevSeconds = RTC_seconds;
   unsigned long RTC_ReadingStartTime = millis();
@@ -1374,13 +1392,45 @@ void SyncWithGPS()
       return;
     }
     Serial.println(F("Updating time from GPS..."));
-    Serial.println(GPS_Date_Time.GPS_hours);
-    Serial.println(GPS_Date_Time.GPS_minutes);
+    Serial.print(GPS_Date_Time.GPS_hours);
+    Serial.print(":");
+    Serial.print(GPS_Date_Time.GPS_minutes);
+    Serial.print(":");
     Serial.println(GPS_Date_Time.GPS_seconds);
-
+    // Begin GPS Rollover Fix
+    if (correctRollover == true) {
+    setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
+    setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
+    Serial.print("Rollover Original Date: ");
+    Serial.print(month());
+    Serial.print("/");
+    Serial.print(day());
+    Serial.print("/");
+    Serial.println(year());
+    DateTime now = rtc.now();
+    DateTime correctedRolloverTime (now + TimeSpan(7168,0,0,0)); // add 7 * 1024 days to the returned GPS date (Rollover BUG)
+    setTime(correctedRolloverTime.hour(), correctedRolloverTime.minute(), correctedRolloverTime.second(), correctedRolloverTime.day(), correctedRolloverTime.month(), correctedRolloverTime.year() % 1000);
+    adjustTime((long)value[HoursOffsetIndex] * 3600);
+    setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
+    Serial.print("Rollover Corrected Date: ");
+    Serial.print(correctedRolloverTime.month());
+    Serial.print("/");
+    Serial.print(correctedRolloverTime.day());
+    Serial.print("/");
+    Serial.println(correctedRolloverTime.year());
+    correctRollover = false;
+    } else {
     setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
     adjustTime((long)value[HoursOffsetIndex] * 3600);
     setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
+    Serial.print("Date: ");
+    Serial.print(month());
+    Serial.print("/");
+    Serial.print(day());
+    Serial.print("/");
+    Serial.println(year());
+    }
+    // END GPS Rollover Fix
     Last_Time_GPS_Sync = MillsNow;
     GPS_Sync_Interval = GPS_SYNC_INTERVAL;
     AttMsgWasShowed=false;
@@ -1458,14 +1508,19 @@ bool GPS_Parse_DateTime()
   //Serial.print("yyyy: ");
   //Serial.println(yyyy);
   //if ((hh<0) || (mm<0) || (ss<0) || (dd<0) || (MM<0) || (yyyy<0)) return false;
-  if ( !inRange( yyyy, 2018, 2038 ) ||
-       !inRange( MM, 1, 12 ) ||
+  // Begin GPS Rollover Fix
+  if ( !inRange( yyyy, 2022, 2038 )) { 
+  Serial.println("GPS Rollover Correction Required!");
+  correctRollover = true;
+    }
+  else if (!inRange( MM, 1, 12 ) ||
        !inRange( dd, 1, 31 ) ||
        !inRange( hh, 0, 23 ) ||
        !inRange( mm, 0, 59 ) ||
-       !inRange( ss, 0, 59 ) ) return false;
-  else
-  {
+       !inRange( ss, 0, 59 ) ) {
+       Serial.println("GPS Time/Date Invalid! Waiting for lock."); 
+       return false;
+       }
     GPS_Date_Time.GPS_hours = hh;
     GPS_Date_Time.GPS_minutes = mm;
     GPS_Date_Time.GPS_seconds = ss;
@@ -1476,7 +1531,7 @@ bool GPS_Parse_DateTime()
     //Serial.println("Precision TIME HAS BEEN ACCURED!!!!!!!!!");
     //GPS_Package[0]=0x0A;
     return 1;
-  }
+        // END GPS Rollover Fix
 }
 
 uint8_t ControlCheckSum()
