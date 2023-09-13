@@ -25,6 +25,22 @@ void SPISetup()
     else SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE2));
 }
 
+void TurnOffAllTubes()
+{
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+
+  digitalWrite(LEpin, HIGH); //<<-- это правильно H -> L
+  digitalWrite(LEpin, LOW); // <<-- это правильно H -> L
+}
+
 void doIndication()
 {
   #if defined (__AVR_ATmega328P__)
@@ -34,6 +50,7 @@ void doIndication()
   if ((curMicros-lastTimeInterval1Started)<2000 /*fpsLimit*/) return;
   lastTimeInterval1Started=curMicros;
   #endif
+  if (NightMode) {TurnOffAllTubes(); return;}
     
   unsigned long Var32=0;
   

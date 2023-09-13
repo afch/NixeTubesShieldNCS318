@@ -3,7 +3,7 @@
 #define PIN            6
 #define NUMPIXELS      8
 #define LEDsSpeed      10
-const int LEDsDelay=40;
+const int LEDsDelay=80;
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
@@ -87,7 +87,8 @@ void setLEDsFromEEPROM()
 
   for(int i=0;i<NUMPIXELS;i++)
   {
-    pixels.setPixelColor(i, pixels.Color(R, G, B)); 
+    if(RGBLedsOn) pixels.setPixelColor(i, pixels.Color(R, G, B)); 
+      else pixels.setPixelColor(i, pixels.Color(0, 0, 0));
   }
   pixels.show();
   /*analogWrite(RedLedPin, EEPROM.read(LEDsRedValueEEPROMAddress));
