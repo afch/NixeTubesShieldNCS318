@@ -1,5 +1,5 @@
 const String FirmwareVersion = "019800";
-const char HardwareVersion[] PROGMEM = {"NCS318/568 for HW 1.x HV5122 or HV5222"};
+const char HardwareVersion[] PROGMEM = {"NCS318/568 for HW 1.x HV5122 or HV5222 Low noise mod"};
 //#define DEBUG
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS318/568 for HW 1.x by GRA & AFCH (fominalec@gmail.com)
@@ -1676,8 +1676,8 @@ void timerSetup()
   TCCR4B = (1 << CS12) | (1 << CS10) | (1 << WGM12); //prescaler 1024 and CTC mode
   //OCR5A = 31; //2 mS
   TCNT4 = 0; //reset counter to 0
-  OCR4A = 46; //3mS
-  //OCR4A = 92; //6mS
+  //OCR4A = 46; //3mS //More Noise ~-70dB at 6khz, 12 khz
+  OCR4A = 92; //6mS //Less Noise ~-80dB at 6khz, 12 khz
   TIMSK4 = (1 << OCIE1A);//TIMER3_COMPA_vect interrupt enable
   sei();
 }
