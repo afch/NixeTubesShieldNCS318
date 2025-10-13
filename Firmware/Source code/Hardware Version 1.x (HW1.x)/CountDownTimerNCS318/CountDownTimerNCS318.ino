@@ -11,6 +11,8 @@
 #include <Tone.h>
 #include <ClickButton.h>
 #include <Adafruit_NeoPixel.h>
+#include <EEPROM.h>
+
 //const byte BlueLedPin = 3;
 const byte pinBuzzer = 2;
 const byte pinSet = A0;
@@ -58,12 +60,27 @@ void timerSetup() {
   sei();
 }
 #endif
+
+int32_t counter = 0;
+int32_t counterStartValue = 0;
+bool isRunning = false;
+bool editMode = false;
+int editPosition = 0;
+unsigned long prevTickTime = millis();
+int minutes, seconds;
+bool LD, UD;
+uint8_t digitsArray[6] = { 0, 0, 5, 9, 5, 9 };
+//uint8_t digitsArray[8]={1,2,3,4,5,6};
+//                        h h:m m:s s
+int limit = 9;
+unsigned long timePassed = 0;
+
 /*******************************************************************************************************
 Init Programm
 *******************************************************************************************************/
 void setup() {
   Serial.begin(115200);
-  Serial.println(F("Сountdown timer for NCS318 ver. 1.0"));
+  Serial.println(F("Сountdown timer for NCS318 ver. 1.1"));
 
   LEDsSetup();
   SetLEDsBlue();
@@ -84,7 +101,12 @@ void setup() {
   //tone1.play(1000, 100);
 
   //Serial.println("Setting up the counter");
-  setCounter();
+  //setCounter();
+
+  EEPROM.get(0, counter);
+  Serial.print("counter=");
+  Serial.println(counter);
+  if ((counter > 359999) || (counter <= 0)) setCounter();
 
   //buttons objects inits
   setButton.debounceTime = 20;     // Debounce timer in ms
@@ -110,19 +132,6 @@ void setup() {
 /***************************************************************************************************************
 MAIN Programm
 ***************************************************************************************************************/
-int32_t counter = 0;
-int32_t counterStartValue = 0;
-bool isRunning = false;
-bool editMode = false;
-int editPosition = 0;
-unsigned long prevTickTime = millis();
-int minutes, seconds;
-bool LD, UD;
-uint8_t digitsArray[6] = { 0, 0, 5, 9, 5, 9 };
-//uint8_t digitsArray[8]={1,2,3,4,5,6};
-//                        h h:m m:s s
-int limit = 9;
-unsigned long timePassed = 0;
 
 void loop() {
 
@@ -594,5 +603,8 @@ void ExitFromEditMode()
   setCounter();
   counterStartValue = counter;
   Serial.println("Edit Mode OFF");
+  // Serial.print("counter=");
+  // Serial.println(counter);
+  EEPROM.put(0, counter);
 }
 
