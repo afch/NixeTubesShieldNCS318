@@ -1,11 +1,11 @@
 //NIXIE COUNTDOWN TIMER FOR NCT818 by GRA & AFCH (fominalec@gmail.com)
 
-//v1.0 23.04.2021
+//v1.2 14.10.2025
 //***********************************
 //Mode button - Start/Pause
-//Mode(LONG) - Set
-//Up button - Increase
-//Down button - Decrease
+//Mode(LONG) - Set (/return)
+//Up button - Increase (while edit mode)
+//Down button - Decrease (while edit mode)
 
 #include <SPI.h>
 #include <Tone.h>
@@ -80,7 +80,7 @@ Init Programm
 *******************************************************************************************************/
 void setup() {
   Serial.begin(115200);
-  Serial.println(F("Сountdown timer for NCS318 ver. 1.1"));
+  Serial.println(F("Сountdown timer for NCS318 ver. 1.2"));
 
   LEDsSetup();
   SetLEDsBlue();
@@ -104,6 +104,7 @@ void setup() {
   //setCounter();
 
   EEPROM.get(0, counter);
+  counterStartValue = counter;
   Serial.print("counter=");
   Serial.println(counter);
   if ((counter > 359999) || (counter <= 0)) setCounter();
@@ -193,6 +194,23 @@ void loop() {
       else digitsArray[editPosition] = limit;
       printDigitsArray();
       updateTubes();
+    }
+  }
+
+  if (editMode == false) 
+  {
+    if (upButton.clicks > 0)
+    {
+      tone1.play(1000, 100);
+      isRunning = false;
+      counter = counterStartValue;
+    }
+
+    if (downButton.clicks > 0)
+    {
+      tone1.play(1000, 100);
+      //isRunning = false;
+      counter = 0;
     }
   }
 
