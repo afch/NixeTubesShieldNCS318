@@ -1,5 +1,7 @@
 //NIXIE COUNTDOWN TIMER FOR NCT818 by GRA & AFCH (fominalec@gmail.com)
 
+//v1.3 15.10.2025
+//Added: IR remote support
 //v1.2 14.10.2025
 //***********************************
 //Mode button - Start/Pause
@@ -75,12 +77,114 @@ uint8_t digitsArray[6] = { 0, 0, 5, 9, 5, 9 };
 int limit = 9;
 unsigned long timePassed = 0;
 
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+#include <IRremote.h>
+int RECV_PIN = 4;
+IRrecv irrecv(RECV_PIN);
+decode_results IRresults;
+// buttons codes for remote controller Sony RM-X151
+#define IR_BUTTON_UP_CODE     0x6621
+#define IR_BUTTON_DOWN_CODE   0x2621
+#define IR_BUTTON_MODE_CODE   0x7121
+#define IR_BUTTON_MENU_CODE   0x2821
+#define IR_BUTTON_LEFT_CODE   0x5621
+#define IR_BUTTON_RIGHT_CODE  0x1621
+#define IR_BUTTON_OFF_CODE    0x5821
+#define IR_BUTTON_ENTER_CODE  0x1D21
+
+
+class IRButtonState
+{
+  public:
+    int PAUSE_BETWEEN_PACKETS = 50;
+    int PACKETS_QTY_IN_LONG_PRESS = 18;
+
+  private:
+    bool Flag = 0;
+    byte CNT_packets = 0;
+    unsigned long lastPacketTime = 0;
+    bool START_TIMER = false;
+    int _buttonCode;
+
+  public: IRButtonState::IRButtonState(int buttonCode)
+    {
+      _buttonCode = buttonCode;
+    }
+
+  public: int IRButtonState::checkButtonState(int receivedCode)
+    {
+      if (((millis() - lastPacketTime) > PAUSE_BETWEEN_PACKETS) && (START_TIMER == true))
+      {
+        START_TIMER = false;
+        if (CNT_packets >= 2) {
+          Flag = 0;
+          CNT_packets = 0;
+          START_TIMER = false;
+          return 1;
+        }
+        else {
+          Flag = 0;
+          CNT_packets = 0;
+          return 0;
+        }
+      }
+      else
+      {
+        if (receivedCode == _buttonCode) {
+          Flag = 1;
+        }
+        else
+        {
+          if (!(Flag == 1)) {
+            return 0;
+          }
+          else
+          {
+            if (!(receivedCode == 0xFFFFFFFF)) {
+              return 0;
+            }
+          }
+        }
+        CNT_packets++;
+        lastPacketTime = millis();
+        START_TIMER = true;
+        if (CNT_packets >= PACKETS_QTY_IN_LONG_PRESS) {
+          Flag = 0;
+          CNT_packets = 0;
+          START_TIMER = false;
+          return -1;
+        }
+        else {
+          return 0;
+        }
+      }
+    }
+};
+
+IRButtonState IRModeButton(IR_BUTTON_MODE_CODE);
+IRButtonState IRMenuButton(IR_BUTTON_MENU_CODE);
+IRButtonState IRUpButton(IR_BUTTON_UP_CODE);
+IRButtonState IRDownButton(IR_BUTTON_DOWN_CODE);
+IRButtonState IREnterButton(IR_BUTTON_ENTER_CODE);
+IRButtonState IRLeftButton(IR_BUTTON_LEFT_CODE);
+IRButtonState IRRightButton(IR_BUTTON_RIGHT_CODE);
+#endif
+
+int ModeButtonState = 0;
+int MenuButtonState = 0;
+int UpButtonState = 0;
+int DownButtonState = 0;
+int EnterButtonState = 0;
+int LeftButtonState = 0;
+int RightButtonState = 0;
+//IR remote control /////////// END ////////////////////////////
+
 /*******************************************************************************************************
 Init Programm
 *******************************************************************************************************/
 void setup() {
   Serial.begin(115200);
-  Serial.println(F("Сountdown timer for NCS318 ver. 1.2"));
+  Serial.println(F("Сountdown timer for NCS318 ver. 1.3"));
 
   LEDsSetup();
   SetLEDsBlue();
@@ -128,13 +232,62 @@ void setup() {
   timerSetup();
 #endif
   //Serial.println("The timer has been set");
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+  irrecv.blink13(false);
+  irrecv.enableIRIn(); // Start the receiver
+#endif
 }
 
 /***************************************************************************************************************
 MAIN Programm
 ***************************************************************************************************************/
 
-void loop() {
+void loop() 
+{
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+  IRresults.value = 0;
+  if (irrecv.decode(&IRresults)) {
+    //Serial.println(IRresults.value, HEX); // debug
+    irrecv.resume(); // Receive the next value
+  }
+
+  ModeButtonState = IRModeButton.checkButtonState(IRresults.value);
+  if (ModeButtonState == 1) Serial.println(F("Mode short"));
+  if (ModeButtonState == -1) Serial.println(F("Mode long...."));
+
+  MenuButtonState = IRMenuButton.checkButtonState(IRresults.value);
+  if (MenuButtonState == 1) Serial.println(F("Menu short"));
+  if (MenuButtonState == -1) Serial.println(F("Menu long...."));
+
+  UpButtonState = IRUpButton.checkButtonState(IRresults.value);
+  if (UpButtonState == 1) Serial.println(F("Up short"));
+  if (UpButtonState == -1) Serial.println(F("Up long...."));
+
+  DownButtonState = IRDownButton.checkButtonState(IRresults.value);
+  if (DownButtonState == 1) Serial.println(F("Down short"));
+  if (DownButtonState == -1) Serial.println(F("Down long...."));
+
+  EnterButtonState = IREnterButton.checkButtonState(IRresults.value);
+  if (EnterButtonState == 1) Serial.println(F("Enter short"));
+  if (EnterButtonState == -1) Serial.println(F("Enter long...."));
+
+  LeftButtonState = IRLeftButton.checkButtonState(IRresults.value);
+  if (LeftButtonState == 1) Serial.println(F("Left short"));
+  if (LeftButtonState == -1) Serial.println(F("Left long...."));
+
+  RightButtonState = IRRightButton.checkButtonState(IRresults.value);
+  if (RightButtonState == 1) Serial.println(F("Right short"));
+  if (RightButtonState == -1) Serial.println(F("Right long...."));
+
+#else
+  ModeButtonState = 0;
+  MenuButtonState = 0;
+  UpButtonState = 0;
+  DownButtonState = 0;
+  EnterButtonState = 0;
+  LeftButtonState = 0;
+  RightButtonState = 0;
+#endif
 
   if (editMode == true) {
     blinkMask = 1 << editPosition;
@@ -144,7 +297,7 @@ void loop() {
   setButton.Update();
   downButton.Update();
 
-  if ((setButton.clicks < 0)) { //long click
+  if ((setButton.clicks < 0) || (MenuButtonState == 1) || (ModeButtonState == 1)) { //long click
     //editMode=true;
     tone1.play(1000, 100);
     editMode = !editMode;
@@ -154,11 +307,11 @@ void loop() {
         ExitFromEditMode();
   }
 
-  if (editPosition > 5) {
-    ExitFromEditMode();
-  }
+  // if (editPosition > 5) {
+  //   ExitFromEditMode();
+  // }
 
-  if ((setButton.clicks > 0)) {
+  if ((setButton.clicks > 0) || (EnterButtonState == 1)) { //short click
     SetLEDsBlue();
     tone1.play(1000, 100);
     if (editMode == true) {
@@ -175,8 +328,12 @@ void loop() {
     }
   }
 
+  if ((editPosition > 5) || (editPosition < 0)) {
+    ExitFromEditMode();
+  }
+
   if (editMode == true) {
-    if (upButton.clicks > 0) {
+    if ((upButton.clicks > 0) || (UpButtonState == 1)) {
       tone1.play(1000, 100);
       if ((editPosition == 2) || (editPosition == 4)) limit = 5;  //tens of minutes or seconds
       else limit = 9;
@@ -186,7 +343,7 @@ void loop() {
       updateTubes();
     }
 
-    if (downButton.clicks > 0) {
+    if ((downButton.clicks > 0) || (DownButtonState == 1)) {
       tone1.play(1000, 100);
       if ((editPosition == 2) || (editPosition == 4)) limit = 5;  //tens of minutes or seconds
       else limit = 9;
@@ -195,24 +352,40 @@ void loop() {
       printDigitsArray();
       updateTubes();
     }
+
+    if (RightButtonState == 1)
+    {
+      tone1.play(1000, 100);
+      editPosition++;
+      Serial.print("EditPosition = ");
+      Serial.println(editPosition);
+    }
+
+    if (LeftButtonState == 1)
+    {
+      tone1.play(1000, 100);
+      editPosition--;
+      Serial.print("EditPosition = ");
+      Serial.println(editPosition);
+    } 
   }
 
   if (editMode == false) 
   {
-    if (upButton.clicks > 0)
+    if ((upButton.clicks > 0) || (UpButtonState == 1))
     {
       tone1.play(1000, 100);
       isRunning = false;
       counter = counterStartValue;
     }
 
-    if (downButton.clicks > 0)
+    if ((downButton.clicks > 0) || (DownButtonState == 1))
     {
       tone1.play(1000, 100);
       //isRunning = false;
       counter = 0;
     }
-  }
+   }
 
   if (isRunning) doDotBlink();
   timePassed = millis() - prevTickTime;
