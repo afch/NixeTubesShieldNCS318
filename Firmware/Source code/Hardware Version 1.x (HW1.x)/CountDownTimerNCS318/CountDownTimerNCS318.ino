@@ -1,5 +1,7 @@
 //NIXIE COUNTDOWN TIMER FOR NCT818 by GRA & AFCH (fominalec@gmail.com)
 
+//v1.4 15.10.2025
+//Added: IR remote OFF button support
 //v1.3 15.10.2025
 //Added: IR remote support
 //v1.2 14.10.2025
@@ -168,6 +170,7 @@ IRButtonState IRDownButton(IR_BUTTON_DOWN_CODE);
 IRButtonState IREnterButton(IR_BUTTON_ENTER_CODE);
 IRButtonState IRLeftButton(IR_BUTTON_LEFT_CODE);
 IRButtonState IRRightButton(IR_BUTTON_RIGHT_CODE);
+IRButtonState IROffButton(IR_BUTTON_OFF_CODE);
 #endif
 
 int ModeButtonState = 0;
@@ -177,7 +180,10 @@ int DownButtonState = 0;
 int EnterButtonState = 0;
 int LeftButtonState = 0;
 int RightButtonState = 0;
+int OffButtonState = 0;
 //IR remote control /////////// END ////////////////////////////
+
+bool OffState = false;
 
 /*******************************************************************************************************
 Init Programm
@@ -279,6 +285,10 @@ void loop()
   if (RightButtonState == 1) Serial.println(F("Right short"));
   if (RightButtonState == -1) Serial.println(F("Right long...."));
 
+  OffButtonState = IROffButton.checkButtonState(IRresults.value);
+  if (OffButtonState == 1) Serial.println(F("Off short"));
+  if (OffButtonState == -1) Serial.println(F("Off long...."));
+
 #else
   ModeButtonState = 0;
   MenuButtonState = 0;
@@ -287,6 +297,7 @@ void loop()
   EnterButtonState = 0;
   LeftButtonState = 0;
   RightButtonState = 0;
+  OffButtonState = 0;
 #endif
 
   if (editMode == true) {
@@ -296,6 +307,31 @@ void loop()
   upButton.Update();
   setButton.Update();
   downButton.Update();
+
+  if (OffButtonState == 1)
+  {
+    tone1.play(1000, 100);
+    OffState = !OffState;
+    if (OffState == true) 
+    {
+      isRunning = false;
+      TurnOffLEDs();
+    } else 
+      {
+        TurnOnLEDs();
+      }
+  }
+
+  if ((OffState == true) && (setButton.clicks == 0)) 
+  {
+    return;
+  } else if (setButton.clicks > 0) 
+    {
+      tone1.play(1000, 100);
+      TurnOnLEDs();
+      if (OffState == true) setButton.clicks = 0;
+      OffState = false;
+    }
 
   if ((setButton.clicks < 0) || (MenuButtonState == 1) || (ModeButtonState == 1)) { //long click
     //editMode=true;
@@ -487,7 +523,24 @@ String PreZero4(uint16_t digit) {
 #define TubeON 0xFFFF
 #define TubeOFF 0x3C00
 
-void doIndication() {
+void TurnOffAllTubes()
+{
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+
+  digitalWrite(LEpin, HIGH); //<<-- это правильно H -> L
+  digitalWrite(LEpin, LOW); // <<-- это правильно H -> L
+}
+
+void doIndication() 
+{
 #if defined(__AVR_ATmega328P__)
   static unsigned long lastTimeInterval1Started;
   static unsigned long curMicros;
@@ -495,7 +548,7 @@ void doIndication() {
   if ((curMicros - lastTimeInterval1Started) < 2000 /*fpsLimit*/) return;
   lastTimeInterval1Started = curMicros;
 #endif
-  //if (NightMode) {TurnOffAllTubes(); return;}
+  if (OffState == true) {TurnOffAllTubes(); return;}
 
   unsigned long Var32 = 0;
 
@@ -511,7 +564,7 @@ void doIndication() {
   bitClear(PORTB, PB4);
 #endif
 
-  //-------- REG 1 -----------------------------------------------
+   //-------- REG 1 -----------------------------------------------
   Var32 = 0;
 
   Var32 |= (unsigned long)(SymbolArray[digits % 10] & doEditBlink(5) & moveMask()) << 20;  // s2
@@ -779,6 +832,19 @@ void SetLEDsRed() {
     pixels.setPixelColor(i, pixels.Color(255, 0, 0));
   }
   pixels.show();  // This sends the updated pixel color to the hardware.
+}
+
+void TurnOffLEDs()
+{
+  pixels.setBrightness(0);
+  pixels.show();
+}
+
+void TurnOnLEDs()
+{
+  pixels.setBrightness(50);
+  SetLEDsBlue();
+  pixels.show();
 }
 
 void EnterToEditMode()

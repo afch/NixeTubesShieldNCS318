@@ -10,3 +10,4 @@ MENU/MODE - enter and exit setup mode
 LEFT/RIGHT - move edit position
 UP/DOWN – in setup mode increases or decreases each digit individually.
 Enter - Start/Stop timer
+OFF - On/Off the device
